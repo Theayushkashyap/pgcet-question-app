@@ -13,6 +13,11 @@ interface Question {
   answer: string;
 }
 
+interface StatRow {
+  date: string;
+  wrongCount: number;
+}
+
 export default function QuizPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -23,6 +28,8 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const [finished, setFinished] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [activeTab, setActiveTab] = useState<'quiz' | 'stats'>('quiz');
+  const [stats, setStats] = useState<StatRow[]>([]);
 
   const fetchQuestions = async () => {
     try {
@@ -33,17 +40,39 @@ export default function QuizPage() {
         );
 
       if (error) {
-        console.error('Supabase error:', error.message);
         setError(error.message);
         setQuestions([]);
       } else {
         setQuestions(data ?? []);
       }
     } catch (err) {
-      console.error('Unexpected fetch error:', err);
       setError((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const { data, error } = await supabaseClient
+        .from('user_answers')
+        .select('created_at')
+        .eq('is_correct', false)
+        .order('created_at', { ascending: true });
+
+      if (!error && data) {
+        const grouped: Record<string, number> = {};
+        data.forEach(({ created_at }) => {
+          const date = new Date(created_at).toISOString().split('T')[0];
+          grouped[date] = (grouped[date] || 0) + 1;
+        });
+        const rows = Object.entries(grouped)
+          .map(([date, wrongCount]) => ({ date, wrongCount }))
+          .sort((a, b) => a.date.localeCompare(b.date));
+        setStats(rows);
+      }
+    } catch (err) {
+      console.error('Error fetching stats:', err);
     }
   };
 
@@ -51,39 +80,32 @@ export default function QuizPage() {
     fetchQuestions();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'stats') {
+      fetchStats();
+    }
+  }, [activeTab]);
+
   const handleStart = () => {
     setShowWelcome(false);
   };
 
   const handleSubmitOrNext = async () => {
     const current = questions[currentIndex];
-
     if (!submitted) {
-      // first click: submit answer
       setSubmitted(true);
       const isCorrect = selectedOption === current.answer;
-      if (isCorrect) {
-        setScore((prev) => prev + 1);
-      }
-
-      // record to DB
-      const { error: insertError } = await supabaseClient
-        .from('user_answers')
-        .insert({
-          question_id: current.id,
-          selected_option: selectedOption,
-          is_correct: isCorrect,
-        });
-
-      if (insertError) {
-        console.error('Failed to record answer:', insertError.message);
-      }
+      if (isCorrect) setScore((s) => s + 1);
+      await supabaseClient.from('user_answers').insert({
+        question_id: current.id,
+        selected_option: selectedOption,
+        is_correct: isCorrect,
+      });
     } else {
-      // second click: next question or finish
       setSubmitted(false);
       setSelectedOption('');
       if (currentIndex + 1 < questions.length) {
-        setCurrentIndex((prev) => prev + 1);
+        setCurrentIndex((i) => i + 1);
       } else {
         setFinished(true);
       }
@@ -99,6 +121,7 @@ export default function QuizPage() {
     setError(null);
     setLoading(true);
     setShowWelcome(true);
+    setActiveTab('quiz');
     fetchQuestions();
   };
 
@@ -117,15 +140,8 @@ export default function QuizPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <main className="p-6 text-center">
-        <p>Loading questions…</p>
-      </main>
-    );
-  }
-
-  if (error) {
+  if (loading) return <p className="p-6 text-center">Loading…</p>;
+  if (error)
     return (
       <main className="p-6 text-center">
         <p className="text-red-600">Error: {error}</p>
@@ -137,113 +153,128 @@ export default function QuizPage() {
         </button>
       </main>
     );
-  }
-
-  if (questions.length === 0) {
-    return (
-      <main className="p-6 text-center">
-        <p className="text-gray-700">No questions available.</p>
-        <button
-          onClick={handleRestart}
-          className="mt-4 px-4 py-2 bg-gray-600 text-white rounded"
-        >
-          Reload
-        </button>
-      </main>
-    );
-  }
-
-  const current = questions[currentIndex];
-  const options = [
-    current.option_a,
-    current.option_b,
-    current.option_c,
-    current.option_d,
-  ];
 
   return (
     <main className="p-6 max-w-xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">PGCET MCQ Quiz</h1>
+      <div className="flex space-x-4 mb-6">
+        <button
+          onClick={() => setActiveTab('quiz')}
+          className={
+            activeTab === 'quiz'
+              ? 'px-4 py-2 bg-indigo-600 text-white rounded'
+              : 'px-4 py-2 bg-gray-200 rounded'
+          }
+        >
+          Quiz
+        </button>
+        <button
+          onClick={() => setActiveTab('stats')}
+          className={
+            activeTab === 'stats'
+              ? 'px-4 py-2 bg-indigo-600 text-white rounded'
+              : 'px-4 py-2 bg-gray-200 rounded'
+          }
+        >
+          Your Stats
+        </button>
+      </div>
 
-      {finished ? (
-        <div className="text-center">
-          <p className="text-2xl mb-4">Quiz Complete!</p>
-          <p className="text-xl">
-            Score: {score} / {questions.length}
-          </p>
-          <button
-            onClick={handleRestart}
-            className="mt-6 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Restart Quiz
-          </button>
-        </div>
-      ) : (
-        <div>
-          <p className="mb-2">
-            Question {currentIndex + 1} of {questions.length}
-          </p>
-          <p className="font-medium mb-4">{current.question}</p>
-
-          <div className="space-y-3 mb-6">
-            {options.map((opt, idx) => {
-              const isCorrect = submitted && opt === current.answer;
-              const isSelectedWrong =
-                submitted &&
-                opt === selectedOption &&
-                selectedOption !== current.answer;
-
-              return (
-                <label
-                  key={idx}
-                  className={`flex items-center space-x-2 p-2 rounded cursor-pointer
-                    ${isCorrect ? 'bg-green-100' : ''}
-                    ${isSelectedWrong ? 'bg-red-100' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="option"
-                    value={opt}
-                    checked={selectedOption === opt}
-                    disabled={submitted}
-                    onChange={() => setSelectedOption(opt)}
-                    className="form-radio"
-                  />
-                  <span
-                    className={`${
+      {activeTab === 'quiz' ? (
+        finished ? (
+          <div className="text-center">
+            <p className="text-2xl mb-4">Quiz Complete!</p>
+            <p className="text-xl">Score: {score} / {questions.length}</p>
+            <button
+              onClick={handleRestart}
+              className="mt-6 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Restart Quiz
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="mb-2">
+              Question {currentIndex + 1} of {questions.length}
+            </p>
+            <p className="font-medium mb-4">{questions[currentIndex].question}</p>
+            <div className="space-y-3 mb-6">
+              {[
+                questions[currentIndex].option_a,
+                questions[currentIndex].option_b,
+                questions[currentIndex].option_c,
+                questions[currentIndex].option_d,
+              ].map((opt, idx) => {
+                const isCorrect = submitted && opt === questions[currentIndex].answer;
+                const isWrong = submitted && opt === selectedOption && selectedOption !== questions[currentIndex].answer;
+                return (
+                  <label
+                    key={idx}
+                    className={
+                      `flex items-center space-x-2 p-2 rounded cursor-pointer \${
+                        isCorrect
+                          ? 'bg-green-100'
+                          : isWrong
+                          ? 'bg-red-100'
+                          : ''
+                      }`
+                    }
+                  >
+                    <input
+                      type="radio"
+                      value={opt}
+                      checked={selectedOption === opt}
+                      disabled={submitted}
+                      onChange={() => setSelectedOption(opt)}
+                    />
+                    <span className={
                       isCorrect
                         ? 'text-green-600 font-semibold'
-                        : ''
-                    } ${
-                      isSelectedWrong
+                        : isWrong
                         ? 'text-red-600 font-semibold'
                         : ''
-                    }`}
-                  >
-                    {opt}
-                  </span>
-                </label>
-              );
-            })}
+                    }>{opt}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {submitted && selectedOption !== questions[currentIndex].answer && (
+              <p className="text-green-600 mb-4">
+                Correct answer: {questions[currentIndex].answer}
+              </p>
+            )}
+            <button
+              onClick={handleSubmitOrNext}
+              disabled={!selectedOption && !submitted}
+              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {!submitted ? 'Submit' : currentIndex + 1 === questions.length ? 'Finish' : 'Next'}
+            </button>
           </div>
-
-          {submitted && selectedOption !== current.answer && (
-            <p className="text-green-600 mb-4">
-              Correct answer: {current.answer}
-            </p>
+        )
+      ) : (
+        // Stats tab
+        <div>
+          {stats.length === 0 ? (
+            <p className="text-gray-700">No wrong answers recorded.</p>
+          ) : (
+            <table className="w-full text-left border">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="px-4 py-2">Date</th>
+                  <th className="px-4 py-2">Wrong Answers</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map(({ date, wrongCount }) => (
+                  <tr key={date} className="border-t">
+                    <td className="px-4 py-2">{date}</td>
+                    <td className="px-4 py-2">{wrongCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-
-          <button
-            onClick={handleSubmitOrNext}
-            disabled={!selectedOption && !submitted}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {!submitted
-              ? 'Submit'
-              : currentIndex + 1 === questions.length
-              ? 'Finish'
-              : 'Next'}
-          </button>
         </div>
       )}
     </main>
