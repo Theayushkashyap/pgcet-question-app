@@ -8,27 +8,50 @@ export interface Question {
   source: string;
 }
 
+/**
+ * Fetches and parses multiple-choice questions from a given HTML source URL.
+ * Expects each question block to match the `.question-block` selector,
+ * with inner elements for question text, options, and answer.
+ */
 export async function fetchQuestionsFromSource(url: string): Promise<Question[]> {
+  const questions: Question[] = [];
+
   try {
-    const { data } = await axios.get<string>(url, { timeout: 5000 });
-    const $ = load(data);
-    const questions: Question[] = [];
+    const response = await axios.get<string>(url, {
+      timeout: 5000,
+      responseType: 'text',
+    });
 
-    // ←– **You must update these selectors** to whatever your actual source HTML uses.
-    $('.question-block').each((_, el) => {
-      const text    = $(el).find('.q-text').text().trim();
-      const options = ['.optA', '.optB', '.optC', '.optD']
-        .map(sel => $(el).find(sel).text().trim());
-      const answer  = $(el).find('.answer').text().trim();
+    const $ = load(response.data);
 
-      if (text && options.every(o => o) && answer) {
+    $('.question-block').each((_, element) => {
+      const text = $(element).find('.q-text').text().trim();
+
+      const optionSelectors = ['.optA', '.optB', '.optC', '.optD'];
+      const options = optionSelectors
+        .map((sel) => $(element).find(sel).text().trim())
+        .filter((opt) => opt.length > 0);
+
+      const answer = $(element).find('.answer').text().trim();
+
+      // Only push fully-formed questions
+      if (
+        text &&
+        options.length === optionSelectors.length &&
+        answer
+      ) {
         questions.push({ text, options, answer, source: url });
       }
     });
-
-    return questions;
-  } catch (err: any) {
-    console.error(`Error fetching/parsing ${url}:`, err.message);
-    return [];
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      console.error(`Axios error fetching ${url}:`, err.message);
+    } else if (err instanceof Error) {
+      console.error(`Error parsing ${url}:`, err.message);
+    } else {
+      console.error(`Unknown error fetching ${url}:`, err);
+    }
   }
+
+  return questions;
 }

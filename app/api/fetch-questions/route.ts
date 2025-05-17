@@ -1,38 +1,53 @@
-// app/api/fetch-questions/route.ts
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '../../../lib/supabaseAdmin';
-import { fetchQuestionsFromSource } from '../../../lib/parser';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseClient } from '@/lib/supabaseClient';
 
-export async function GET() {
+// Define the shape of a question record in the database
+export interface Question {
+  id: number;
+  question: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  answer: string;
+}
+
+/**
+ * GET /api/fetch-questions
+ * Fetches all MCQ questions from the Supabase table.
+ */
+export async function GET(req: NextRequest) {
   try {
-    const sources = [
-        'https://www.some-coaching-site.com/pgcet-2023-ques.html',
-        'https://another-site.edu/archives/pgcet-2022-questions.html',
-        // etc.
-      ];
-      
-    let allQs: any[] = [];
-    for (const url of sources) {
-      const qs = await fetchQuestionsFromSource(url);
-      allQs = allQs.concat(qs);
+    const { data, error } = await supabaseClient
+      .from('mcq_questions')
+      .select<Question, {
+        id: number;
+        question: string;
+        option_a: string;
+        option_b: string;
+        option_c: string;
+        option_d: string;
+        answer: string;
+      }>('id, question, option_a, option_b, option_c, option_d, answer')
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error('Supabase fetch error:', error.message);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
 
-    const { error } = await supabaseAdmin
-      .from('questions')
-      .upsert(
-        allQs.map(q => ({
-          question_text: q.text,
-          options:        q.options,
-          answer:         q.answer,
-          source_url:     q.source,
-          fetched_at:     new Date().toISOString(),
-        })),
-        { onConflict: 'question_text' }
-      );
-
-    if (error) throw error;
-    return NextResponse.json({ inserted: allQs.length });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { questions: data ?? [] },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error('Unexpected error in GET /api/fetch-questions:', err);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
