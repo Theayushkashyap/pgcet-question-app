@@ -30,6 +30,7 @@ export default function QuizPage() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [activeTab, setActiveTab] = useState<'quiz' | 'stats'>('quiz');
   const [stats, setStats] = useState<StatRow[]>([]);
+  const [feedbackClass, setFeedbackClass] = useState<string>('');
 
   const fetchQuestions = async () => {
     try {
@@ -95,7 +96,12 @@ export default function QuizPage() {
     if (!submitted) {
       setSubmitted(true);
       const isCorrect = selectedOption === current.answer;
-      if (isCorrect) setScore((s) => s + 1);
+      if (isCorrect) {
+        setScore((s) => s + 1);
+        setFeedbackClass('blink-green');
+      } else {
+        setFeedbackClass('blink-red');
+      }
       await supabaseClient.from('user_answers').insert({
         question_id: current.id,
         selected_option: selectedOption,
@@ -104,6 +110,7 @@ export default function QuizPage() {
     } else {
       setSubmitted(false);
       setSelectedOption('');
+      setFeedbackClass('');
       if (currentIndex + 1 < questions.length) {
         setCurrentIndex((i) => i + 1);
       } else {
@@ -127,54 +134,66 @@ export default function QuizPage() {
 
   if (showWelcome) {
     return (
-      <main className="p-6 text-center min-h-screen flex flex-col justify-center items-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome Deekshitha Jha!</h1>
-        <p className="mb-6 text-lg">Ready to answer some PGCET questions?</p>
-        <button
-          onClick={handleStart}
-          className="px-6 py-3 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Start Quiz
-        </button>
+      <main className="p-8 text-center min-h-screen flex flex-col justify-center items-center glass">
+        <div className="max-w-2xl mx-auto">
+          <h1 className="text-6xl font-bold mb-8 animate-welcome gradient-text">Welcome Deekshitha Jha!</h1>
+          <p className="mb-12 text-2xl text-foreground/80 animate-welcome" style={{ animationDelay: '0.3s' }}>Ready to answer some PGCET questions?</p>
+          <button
+            onClick={handleStart}
+            className="px-10 py-5 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:bg-primary-hover animate-welcome text-xl font-medium hover-lift"
+            style={{ animationDelay: '0.6s' }}
+          >
+            Start Quiz
+          </button>
+        </div>
       </main>
     );
   }
 
-  if (loading) return <p className="p-6 text-center">Loading…</p>;
+  if (loading) return (
+    <div className="p-6 text-center min-h-screen flex items-center justify-center">
+      <div className="p-8 rounded-2xl glass">
+        <p className="text-2xl loading">Loading…</p>
+      </div>
+    </div>
+  );
+  
   if (error)
     return (
-      <main className="p-6 text-center">
-        <p className="text-red-600">Error: {error}</p>
-        <button
-          onClick={handleRestart}
-          className="mt-4 px-4 py-2 bg-gray-600 text-white rounded"
-        >
-          Retry
-        </button>
+      <main className="p-8 text-center min-h-screen flex flex-col items-center justify-center glass">
+        <div className="max-w-md mx-auto">
+          <p className="text-2xl text-error mb-8">Error: {error}</p>
+          <button
+            onClick={handleRestart}
+            className="px-8 py-4 bg-secondary text-foreground rounded-xl hover:bg-secondary/80 hover-lift"
+          >
+            Retry
+          </button>
+        </div>
       </main>
     );
 
   return (
-    <main className="p-6 max-w-xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">PGCET MCQ Quiz</h1>
-      <div className="flex space-x-4 mb-6">
+    <main className="p-8 max-w-3xl mx-auto my-8 rounded-2xl glass">
+      <h1 className="text-5xl font-bold mb-10 gradient-text">PGCET MCQ Quiz</h1>
+      <div className="flex space-x-6 mb-10">
         <button
           onClick={() => setActiveTab('quiz')}
-          className={
+          className={`px-8 py-4 rounded-xl transition-all hover-lift ${
             activeTab === 'quiz'
-              ? 'px-4 py-2 bg-indigo-600 text-white rounded'
-              : 'px-4 py-2 bg-gray-200 rounded'
-          }
+              ? 'bg-gradient-to-r from-primary to-primary-hover text-white shadow-lg'
+              : 'bg-secondary text-foreground hover:bg-secondary/80'
+          }`}
         >
           Quiz
         </button>
         <button
           onClick={() => setActiveTab('stats')}
-          className={
+          className={`px-8 py-4 rounded-xl transition-all hover-lift ${
             activeTab === 'stats'
-              ? 'px-4 py-2 bg-indigo-600 text-white rounded'
-              : 'px-4 py-2 bg-gray-200 rounded'
-          }
+              ? 'bg-gradient-to-r from-primary to-primary-hover text-white shadow-lg'
+              : 'bg-secondary text-foreground hover:bg-secondary/80'
+          }`}
         >
           Your Stats
         </button>
@@ -182,23 +201,23 @@ export default function QuizPage() {
 
       {activeTab === 'quiz' ? (
         finished ? (
-          <div className="text-center">
-            <p className="text-2xl mb-4">Quiz Complete!</p>
-            <p className="text-xl">Score: {score} / {questions.length}</p>
+          <div className="text-center p-10 rounded-2xl bg-secondary/20 glass">
+            <p className="text-4xl font-bold mb-6 gradient-text">Quiz Complete!</p>
+            <p className="text-3xl mb-10">Score: {score} / {questions.length}</p>
             <button
               onClick={handleRestart}
-              className="mt-6 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              className="px-10 py-5 bg-gradient-to-r from-accent to-accent-hover text-white rounded-xl hover:bg-accent-hover text-xl font-medium hover-lift"
             >
               Restart Quiz
             </button>
           </div>
         ) : (
-          <div>
-            <p className="mb-2">
+          <div className={`question-transition p-8 rounded-2xl bg-secondary/10 glass ${feedbackClass}`}>
+            <p className="mb-4 text-sm font-medium text-foreground/60">
               Question {currentIndex + 1} of {questions.length}
             </p>
-            <p className="font-medium mb-4">{questions[currentIndex].question}</p>
-            <div className="space-y-3 mb-6">
+            <p className="text-2xl font-medium mb-8">{questions[currentIndex].question}</p>
+            <div className="space-y-4 mb-10">
               {[
                 questions[currentIndex].option_a,
                 questions[currentIndex].option_b,
@@ -210,15 +229,13 @@ export default function QuizPage() {
                 return (
                   <label
                     key={idx}
-                    className={
-                      `flex items-center space-x-2 p-2 rounded cursor-pointer \${
-                        isCorrect
-                          ? 'bg-green-100'
-                          : isWrong
-                          ? 'bg-red-100'
-                          : ''
-                      }`
-                    }
+                    className={`flex items-center space-x-4 p-5 rounded-xl cursor-pointer transition-all hover-lift ${
+                      isCorrect
+                        ? 'bg-success/20 text-success'
+                        : isWrong
+                        ? 'bg-error/20 text-error'
+                        : 'bg-secondary/50 hover:bg-secondary/70'
+                    }`}
                   >
                     <input
                       type="radio"
@@ -226,50 +243,44 @@ export default function QuizPage() {
                       checked={selectedOption === opt}
                       disabled={submitted}
                       onChange={() => setSelectedOption(opt)}
+                      className="w-6 h-6"
                     />
-                    <span className={
-                      isCorrect
-                        ? 'text-green-600 font-semibold'
-                        : isWrong
-                        ? 'text-red-600 font-semibold'
-                        : ''
-                    }>{opt}</span>
+                    <span className="text-xl">{opt}</span>
                   </label>
                 );
               })}
             </div>
             {submitted && selectedOption !== questions[currentIndex].answer && (
-              <p className="text-green-600 mb-4">
+              <p className="text-success mb-8 p-5 rounded-xl bg-success/20 glass">
                 Correct answer: {questions[currentIndex].answer}
               </p>
             )}
             <button
               onClick={handleSubmitOrNext}
               disabled={!selectedOption && !submitted}
-              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full px-8 py-5 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-xl font-medium hover-lift"
             >
               {!submitted ? 'Submit' : currentIndex + 1 === questions.length ? 'Finish' : 'Next'}
             </button>
           </div>
         )
       ) : (
-        // Stats tab
-        <div>
+        <div className="p-8 rounded-2xl bg-secondary/10 glass">
           {stats.length === 0 ? (
-            <p className="text-gray-700">No wrong answers recorded.</p>
+            <p className="text-center text-foreground/60 text-xl">No wrong answers recorded.</p>
           ) : (
-            <table className="w-full text-left border">
+            <table className="w-full">
               <thead>
-                <tr className="bg-gray-100">
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">Wrong Answers</th>
+                <tr>
+                  <th>Date</th>
+                  <th>Wrong Answers</th>
                 </tr>
               </thead>
               <tbody>
                 {stats.map(({ date, wrongCount }) => (
-                  <tr key={date} className="border-t">
-                    <td className="px-4 py-2">{date}</td>
-                    <td className="px-4 py-2">{wrongCount}</td>
+                  <tr key={date} className="hover:bg-secondary/30 transition-colors">
+                    <td className="text-lg">{date}</td>
+                    <td className="text-lg">{wrongCount}</td>
                   </tr>
                 ))}
               </tbody>
