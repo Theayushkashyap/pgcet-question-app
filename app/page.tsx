@@ -51,6 +51,7 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const [finished, setFinished] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [activeTab, setActiveTab] = useState<'quiz' | 'stats'>('quiz');
   const [stats, setStats] = useState<StatRow[]>([]);
   const [feedbackClass, setFeedbackClass] = useState<string>('');
@@ -159,7 +160,11 @@ export default function QuizPage() {
   }, [activeTab]);
 
   const handleStart = () => {
-    setShowWelcome(false);
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setShowWelcome(false);
+      setIsTransitioning(false);
+    }, 500); // Match this with the animation duration
   };
 
   const handleSubmitOrNext = async () => {
@@ -182,13 +187,14 @@ export default function QuizPage() {
         setFeedbackState('incorrect');
       }
 
-      setTimeout(async () => {
+      // Only save to database if it's the last question
+      if (currentIndex + 1 === questions.length) {
         await supabaseClient.from('user_answers').insert({
           question_id: current.id,
           selected_option: selectedOption,
           is_correct: isCorrect,
         });
-      }, 100);
+      }
     } else {
       setSubmitted(false);
       setSelectedOption('');
@@ -217,7 +223,7 @@ export default function QuizPage() {
 
   if (showWelcome) {
     return (
-      <main className="p-8 text-center min-h-screen flex flex-col justify-center items-center glass">
+      <main className={`p-8 text-center min-h-screen flex flex-col justify-center items-center glass ${isTransitioning ? 'fullscreen-transition' : ''}`}>
         <div className="max-w-2xl mx-auto">
           <h1 className="text-6xl font-bold mb-8 animate-welcome gradient-text">Welcome Deekshitha Jha!</h1>
           <p className="mb-12 text-2xl text-foreground/80 animate-welcome" style={{ animationDelay: '0.3s' }}>Ready to answer some PGCET questions?</p>
@@ -289,7 +295,7 @@ export default function QuizPage() {
             <p className="text-3xl mb-10">Score: {score} / {questions.length}</p>
             <button
               onClick={handleRestart}
-              className="px-10 py-5 bg-gradient-to-r from-accent to-accent-hover text-white rounded-xl hover:bg-accent-hover text-xl font-medium hover-lift"
+              className="px-10 py-5 bg-gradient-to-r from-accent to-accent-hover text-white rounded-xl hover:bg-accent-hover text-xl font-medium hover-lift border-2 border-accent/30 hover:border-accent/50 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               Restart Quiz
             </button>
@@ -348,7 +354,9 @@ export default function QuizPage() {
               disabled={!selectedOption && !submitted}
               className="w-full px-8 py-5 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-xl font-medium hover-lift border-2 border-primary/30 hover:border-primary/50 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
-              {!submitted ? 'Submit' : currentIndex + 1 === questions.length ? 'Finish' : 'Next'}
+              {!submitted 
+                ? (currentIndex + 1 === questions.length ? 'Submit Quiz' : 'Next Question')
+                : (currentIndex + 1 === questions.length ? 'Finish' : 'Next Question')}
             </button>
           </div>
         )
