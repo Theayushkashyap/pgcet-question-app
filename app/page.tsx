@@ -17,9 +17,11 @@ interface Question {
 
 interface StatRow {
   date: string;
+  totalQuestions: number;
+  correctCount: number;
   wrongCount: number;
   year: number;
-  wrongAnswers: {
+  questions: {
     question: string;
     selectedOption: string;
     correctAnswer: string;
@@ -29,6 +31,7 @@ interface StatRow {
     optionD: string;
     year: number;
     explanation: string;
+    isCorrect: boolean;
   }[];
 }
 
@@ -48,6 +51,49 @@ interface UserAnswer {
   };
 }
 
+interface QuizAttempt {
+  id?: number;
+  created_at?: string;
+  year: number;
+  total_questions: number;
+  correct_answers: number;
+  wrong_answers: number;
+  questions: {
+    question_id: number;
+    question: string;
+    selected_option: string;
+    correct_answer: string;
+    is_correct: boolean;
+    option_a: string;
+    option_b: string;
+    option_c: string;
+    option_d: string;
+    explanation: string;
+  }[];
+}
+
+interface QuizAttemptResponse {
+  id: number;
+  created_at: string;
+  year: number;
+  total_questions: number;
+  correct_answers: number;
+  wrong_answers: number;
+  question_responses: {
+    selected_option: string;
+    is_correct: boolean;
+    mcq_questions: {
+      question: string;
+      answer: string;
+      option_a: string;
+      option_b: string;
+      option_c: string;
+      option_d: string;
+      explanation: string;
+    };
+  }[];
+}
+
 export default function QuizPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -65,6 +111,7 @@ export default function QuizPage() {
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [currentAttempt, setCurrentAttempt] = useState<QuizAttempt | null>(null);
 
   // Fetch list of years with questions
   const fetchAvailableYears = async () => {
@@ -107,70 +154,57 @@ export default function QuizPage() {
     }
   };
 
-  // Fetch stats of wrong answers grouped by date
+  // Fetch stats of all answers grouped by date
   const fetchStats = async () => {
     try {
-      const { data, error } = await supabaseClient
-        .from('user_answers')
+      const { data: attempts, error: attemptsError } = await supabaseClient
+        .from('quiz_attempts')
         .select(`
+          id,
           created_at,
-          selected_option,
-          is_correct,
-          mcq_questions (
-            question,
-            answer,
-            option_a,
-            option_b,
-            option_c,
-            option_d,
-            year,
-            explanation
+          year,
+          total_questions,
+          correct_answers,
+          wrong_answers,
+          question_responses (
+            selected_option,
+            is_correct,
+            mcq_questions (
+              question,
+              answer,
+              option_a,
+              option_b,
+              option_c,
+              option_d,
+              explanation
+            )
           )
         `)
-        .eq('is_correct', false)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        const grouped: Record<string, {
-          wrongCount: number;
-          year: number;
-          wrongAnswers: StatRow['wrongAnswers'];
-        }> = {};
+      if (attemptsError) throw attemptsError;
 
-        (data as unknown as UserAnswer[]).forEach(({ created_at, selected_option, mcq_questions }) => {
-          const date = new Date(created_at).toISOString().split('T')[0];
-          if (!grouped[date]) {
-            grouped[date] = {
-              wrongCount: 0,
-              year: mcq_questions.year,
-              wrongAnswers: []
-            };
-          }
-          grouped[date].wrongCount += 1;
-          grouped[date].wrongAnswers.push({
-            question: mcq_questions.question,
-            selectedOption: selected_option,
-            correctAnswer: mcq_questions.answer,
-            optionA: mcq_questions.option_a,
-            optionB: mcq_questions.option_b,
-            optionC: mcq_questions.option_c,
-            optionD: mcq_questions.option_d,
-            year: mcq_questions.year,
-            explanation: mcq_questions.explanation
-          });
-        });
+      const formattedStats: StatRow[] = (attempts as unknown as QuizAttemptResponse[]).map(attempt => ({
+        date: new Date(attempt.created_at).toISOString().split('T')[0],
+        totalQuestions: attempt.total_questions,
+        correctCount: attempt.correct_answers,
+        wrongCount: attempt.wrong_answers,
+        year: attempt.year,
+        questions: attempt.question_responses.map(qr => ({
+          question: qr.mcq_questions.question,
+          selectedOption: qr.selected_option,
+          correctAnswer: qr.mcq_questions.answer,
+          optionA: qr.mcq_questions.option_a,
+          optionB: qr.mcq_questions.option_b,
+          optionC: qr.mcq_questions.option_c,
+          optionD: qr.mcq_questions.option_d,
+          explanation: qr.mcq_questions.explanation,
+          isCorrect: qr.is_correct,
+          year: attempt.year
+        }))
+      }));
 
-        const rows = Object.entries(grouped)
-          .map(([date, { wrongCount, wrongAnswers, year }]) => ({ 
-            date, 
-            wrongCount,
-            year,
-            wrongAnswers
-          }))
-          .sort((a, b) => a.date.localeCompare(b.date));
-        
-        setStats(rows);
-      }
+      setStats(formattedStats);
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
@@ -215,14 +249,50 @@ export default function QuizPage() {
         setFeedbackState('incorrect');
       }
 
-      // Log last answer
-      if (currentIndex + 1 === questions.length) {
-        await supabaseClient.from('user_answers').insert({
-          question_id: current.id,
-          selected_option: selectedOption,
-          is_correct: isCorrect,
-        });
-      }
+      // Store the question response in current attempt
+      setCurrentAttempt(prev => {
+        const newAttempt: QuizAttempt = {
+          year: current.year,
+          total_questions: questions.length,
+          correct_answers: isCorrect ? 1 : 0,
+          wrong_answers: isCorrect ? 0 : 1,
+          questions: [{
+            question_id: current.id,
+            question: current.question,
+            selected_option: selectedOption,
+            correct_answer: correctValue.toString(),
+            is_correct: isCorrect,
+            option_a: current.option_a,
+            option_b: current.option_b,
+            option_c: current.option_c,
+            option_d: current.option_d,
+            explanation: current.explanation
+          }]
+        };
+
+        if (!prev) {
+          return newAttempt;
+        }
+
+        return {
+          ...prev,
+          correct_answers: prev.correct_answers + (isCorrect ? 1 : 0),
+          wrong_answers: prev.wrong_answers + (isCorrect ? 0 : 1),
+          questions: [...prev.questions, {
+            question_id: current.id,
+            question: current.question,
+            selected_option: selectedOption,
+            correct_answer: correctValue.toString(),
+            is_correct: isCorrect,
+            option_a: current.option_a,
+            option_b: current.option_b,
+            option_c: current.option_c,
+            option_d: current.option_d,
+            explanation: current.explanation
+          }]
+        };
+      });
+
     } else {
       // Next question
       setSubmitted(false);
@@ -232,8 +302,47 @@ export default function QuizPage() {
       if (currentIndex + 1 < questions.length) {
         setCurrentIndex(i => i + 1);
       } else {
+        // Quiz finished - save the attempt
+        if (currentAttempt) {
+          saveQuizAttempt(currentAttempt);
+        }
         setFinished(true);
       }
+    }
+  };
+
+  const saveQuizAttempt = async (attempt: QuizAttempt) => {
+    try {
+      // First, save the quiz attempt
+      const { data: attemptData, error: attemptError } = await supabaseClient
+        .from('quiz_attempts')
+        .insert({
+          year: attempt.year,
+          total_questions: attempt.total_questions,
+          correct_answers: attempt.correct_answers,
+          wrong_answers: attempt.wrong_answers
+        })
+        .select()
+        .single();
+
+      if (attemptError) throw attemptError;
+
+      // Then, save all question responses
+      const questionResponses = attempt.questions.map(q => ({
+        attempt_id: attemptData.id,
+        question_id: q.question_id,
+        selected_option: q.selected_option,
+        is_correct: q.is_correct
+      }));
+
+      const { error: responsesError } = await supabaseClient
+        .from('question_responses')
+        .insert(questionResponses);
+
+      if (responsesError) throw responsesError;
+
+    } catch (err) {
+      console.error('Error saving quiz attempt:', err);
     }
   };
 
@@ -397,10 +506,10 @@ export default function QuizPage() {
                               : isWrong
                                 ? 'bg-error/20 text-error border-2 border-error'
                                 : isSelected
-                                  ? 'bg-primary/20 text-primary border-2 border-primary'
+                                  ? 'bg-primary/20 text-primary border-2 border-primary ring-2 ring-primary/30'
                                   : 'bg-secondary/50 border-2 border-secondary'
                             : isSelected
-                              ? 'bg-primary/20 text-primary border-2 border-primary'
+                              ? 'bg-primary/20 text-primary border-2 border-primary ring-2 ring-primary/30'
                               : 'bg-secondary/50 hover:bg-secondary/70 border-2 border-secondary/50'
                         }`}
                       >
@@ -412,15 +521,15 @@ export default function QuizPage() {
                                 : isWrong
                                   ? 'bg-error/30 text-error'
                                   : isSelected
-                                    ? 'bg-primary/30 text-primary'
+                                    ? 'bg-primary/30 text-primary ring-2 ring-primary/30'
                                     : 'bg-secondary/70'
                               : isSelected
-                                ? 'bg-primary/30 text-primary'
+                                ? 'bg-primary/30 text-primary ring-2 ring-primary/30'
                                 : 'bg-secondary/70'
                           }`}>
                             {letter.toUpperCase()}
                           </div>
-                          <span className="text-lg">{optionValue}</span>
+                          <span className={`text-lg ${isSelected ? 'font-medium' : ''}`}>{optionValue}</span>
                         </div>
                       </button>
                     );
@@ -517,23 +626,84 @@ export default function QuizPage() {
                 }
               >
                 <div className="font-medium">
-                  {row.date} — {row.wrongCount} wrong
+                  {row.date} — {row.totalQuestions} questions
+                  <span className="ml-2 text-success">({row.correctCount} correct)</span>
+                  <span className="ml-2 text-error">({row.wrongCount} wrong)</span>
                 </div>
                 <div>{expandedDate === row.date ? '▾' : '▸'}</div>
               </div>
               {expandedDate === row.date && (
-                <ul className="mt-2 pl-4 list-disc space-y-2">
-                  {row.wrongAnswers.map((wa, i) => (
-                    <li key={i}>
-                      <div>
-                        <strong>Q:</strong> {wa.question}
+                <ul className="mt-2 pl-4 space-y-6">
+                  {row.questions.map((q, i) => (
+                    <li key={i} className="bg-secondary/20 p-4 rounded-xl">
+                      <div className="mb-3">
+                        <span className={`text-lg font-medium ${q.isCorrect ? 'text-success' : 'text-error'}`}>
+                          {q.isCorrect ? '✓' : '✕'}
+                        </span>
+                        <span className="ml-2 text-lg font-medium">Question {i + 1}</span>
                       </div>
-                      <div>
-                        <strong>Your:</strong> {wa.selectedOption} |{' '}
-                        <strong>Correct:</strong> {wa.correctAnswer}
+                      <div className="mb-3">
+                        <strong className="text-foreground/80">Question:</strong>
+                        <p className="mt-1 text-foreground">{q.question}</p>
                       </div>
-                      <div className="italic text-sm text-foreground/80">
-                        {wa.explanation}
+                      <div className="space-y-2 mb-3">
+                        <strong className="text-foreground/80 block mb-2">Options:</strong>
+                        {['A', 'B', 'C', 'D'].map((option) => {
+                          const optionValue = q[`option${option}` as keyof typeof q];
+                          const isCorrect = optionValue === q.correctAnswer;
+                          const isSelected = optionValue === q.selectedOption;
+                          
+                          return (
+                            <div
+                              key={option}
+                              className={`p-3 rounded-lg flex items-center space-x-3 ${
+                                isCorrect
+                                  ? 'bg-success/10 border-2 border-success'
+                                  : isSelected
+                                    ? 'bg-error/10 border-2 border-error'
+                                    : 'bg-secondary/10 border-2 border-secondary/50'
+                              }`}
+                            >
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                isCorrect
+                                  ? 'bg-success/30 text-success'
+                                  : isSelected
+                                    ? 'bg-error/30 text-error'
+                                    : 'bg-secondary/30'
+                              }`}>
+                                {option}
+                              </div>
+                              <span className={`${
+                                isCorrect
+                                  ? 'text-success'
+                                  : isSelected
+                                    ? 'text-error'
+                                    : 'text-foreground/80'
+                              }`}>
+                                {optionValue}
+                              </span>
+                              {isCorrect && (
+                                <span className="ml-auto text-success font-medium">
+                                  ✓ Correct Answer
+                                </span>
+                              )}
+                              {isSelected && !isCorrect && (
+                                <span className="ml-auto text-error font-medium">
+                                  ✕ Your Answer
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {q.explanation && (
+                        <div className="bg-primary/10 p-3 rounded-lg">
+                          <strong className="text-primary block mb-1">Explanation:</strong>
+                          <p className="text-primary/80">{q.explanation}</p>
+                        </div>
+                      )}
+                      <div className="mt-3 text-sm text-foreground/60">
+                        PGCET {q.year}
                       </div>
                     </li>
                   ))}
