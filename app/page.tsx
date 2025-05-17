@@ -66,6 +66,7 @@ export default function QuizPage() {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
+  // Fetch list of years with questions
   const fetchAvailableYears = async () => {
     try {
       const { data, error } = await supabaseClient
@@ -82,6 +83,7 @@ export default function QuizPage() {
     }
   };
 
+  // Fetch questions for a given year
   const fetchQuestions = async (year: number) => {
     try {
       const { data, error } = await supabaseClient
@@ -105,6 +107,7 @@ export default function QuizPage() {
     }
   };
 
+  // Fetch stats of wrong answers grouped by date
   const fetchStats = async () => {
     try {
       const { data, error } = await supabaseClient
@@ -177,17 +180,17 @@ export default function QuizPage() {
     fetchAvailableYears();
   }, []);
 
-  const handleYearSelect = (year: number) => {
-    setSelectedYear(year);
-    setLoading(true);
-    fetchQuestions(year);
-  };
-
   useEffect(() => {
     if (activeTab === 'stats') {
       fetchStats();
     }
   }, [activeTab]);
+
+  const handleYearSelect = (year: number) => {
+    setSelectedYear(year);
+    setLoading(true);
+    fetchQuestions(year);
+  };
 
   const handleStart = () => {
     setShowWelcome(false);
@@ -204,7 +207,7 @@ export default function QuizPage() {
       const isCorrect = selectedOption === correctValue;
       
       if (isCorrect) {
-        setScore((s) => s + 1);
+        setScore(s => s + 1);
         setFeedbackClass('blink-green');
         setFeedbackState('correct');
       } else {
@@ -212,6 +215,7 @@ export default function QuizPage() {
         setFeedbackState('incorrect');
       }
 
+      // Log last answer
       if (currentIndex + 1 === questions.length) {
         await supabaseClient.from('user_answers').insert({
           question_id: current.id,
@@ -220,12 +224,13 @@ export default function QuizPage() {
         });
       }
     } else {
+      // Next question
       setSubmitted(false);
       setSelectedOption('');
       setFeedbackClass('');
       setFeedbackState(null);
       if (currentIndex + 1 < questions.length) {
-        setCurrentIndex((i) => i + 1);
+        setCurrentIndex(i => i + 1);
       } else {
         setFinished(true);
       }
@@ -245,16 +250,19 @@ export default function QuizPage() {
     fetchQuestions(selectedYear ?? 0);
   };
 
+  // Welcome screen
   if (showWelcome) {
     return (
       <main className="p-8 text-center min-h-screen flex flex-col justify-center items-center glass">
         <div className="max-w-2xl mx-auto">
-          <h1 className="text-6xl font-bold mb-8 animate-welcome gradient-text">Welcome Deekshitha Jha!</h1>
+          <h1 className="text-6xl font-bold mb-8 animate-welcome gradient-text">
+            Welcome Deekshitha Jha!
+          </h1>
           <p className="mb-12 text-2xl text-foreground/80 animate-welcome" style={{ animationDelay: '0.3s' }}>
             Choose a year to start your PGCET practice
           </p>
           <div className="grid grid-cols-2 gap-4 mb-8">
-            {availableYears.map((year) => (
+            {availableYears.map(year => (
               <button
                 key={year}
                 onClick={() => handleYearSelect(year)}
@@ -282,15 +290,19 @@ export default function QuizPage() {
     );
   }
 
-  if (loading) return (
-    <div className="p-6 text-center min-h-screen flex items-center justify-center">
-      <div className="p-8 rounded-2xl glass">
-        <p className="text-2xl loading">Loading…</p>
+  // Loading state
+  if (loading) {
+    return (
+      <div className="p-6 text-center min-h-screen flex items-center justify-center">
+        <div className="p-8 rounded-2xl glass">
+          <p className="text-2xl loading">Loading…</p>
+        </div>
       </div>
-    </div>
-  );
-  
-  if (error)
+    );
+  }
+
+  // Error state
+  if (error) {
     return (
       <main className="p-8 text-center min-h-screen flex flex-col items-center justify-center glass">
         <div className="max-w-md mx-auto">
@@ -304,10 +316,141 @@ export default function QuizPage() {
         </div>
       </main>
     );
+  }
 
+  // Main Quiz / Stats UI
   return (
     <main className="p-8 max-w-3xl mx-auto my-8 rounded-2xl glass">
-      {/* Quiz and Stats UI unchanged... */}
+      {/* ===== Tabs ===== */}
+      <div className="flex mb-6 space-x-4">
+        <button
+          onClick={() => setActiveTab('quiz')}
+          className={`px-4 py-2 rounded ${
+            activeTab === 'quiz' ? 'bg-primary text-white' : 'bg-secondary text-foreground'
+          }`}
+        >
+          Quiz
+        </button>
+        <button
+          onClick={() => setActiveTab('stats')}
+          className={`px-4 py-2 rounded ${
+            activeTab === 'stats' ? 'bg-primary text-white' : 'bg-secondary text-foreground'
+          }`}
+        >
+          Stats
+        </button>
+      </div>
+
+      {activeTab === 'quiz' ? (
+        // ========== QUIZ VIEW ==========
+        <>
+          {finished ? (
+            <div className="text-center">
+              <h2 className="text-3xl font-bold mb-4">Quiz Complete!</h2>
+              <p className="text-xl mb-6">
+                You scored {score} out of {questions.length}
+              </p>
+              <button
+                onClick={handleRestart}
+                className="px-6 py-3 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:from-primary-hover hover:to-primary text-lg"
+              >
+                Restart
+              </button>
+            </div>
+          ) : (
+            // ========== QUESTION CARD ==========
+            <div className="space-y-6">
+              <div className="text-lg font-medium">
+                Q{currentIndex + 1}. {questions[currentIndex].question}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {(['a','b','c','d'] as const).map(letter => {
+                  const opt = questions[currentIndex][`option_${letter}` as keyof Question];
+                  const isSelected = selectedOption === opt;
+                  const baseClass = `p-4 border rounded-lg cursor-pointer hover:shadow-md transition-all`;
+                  let appliedClass = baseClass;
+                  if (submitted) {
+                    // highlight correct/incorrect after submit
+                    if (opt === questions[currentIndex].answer) {
+                      appliedClass += ' border-green-500 bg-green-100';
+                    } else if (isSelected && feedbackState === 'incorrect') {
+                      appliedClass += ' border-red-500 bg-red-100';
+                    } else {
+                      appliedClass += ' border-gray-300';
+                    }
+                  } else if (isSelected) {
+                    appliedClass += ' border-primary bg-primary/10';
+                  }
+                  return (
+                    <div
+                      key={letter}
+                      className={appliedClass}
+                      onClick={() => !submitted && setSelectedOption(opt)}
+                    >
+                      <strong>{letter.toUpperCase()}.</strong> {opt}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-right">
+                <button
+                  onClick={handleSubmitOrNext}
+                  disabled={!submitted && !selectedOption}
+                  className="px-6 py-3 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:from-primary-hover hover:to-primary transition-all"
+                >
+                  {submitted
+                    ? currentIndex + 1 === questions.length
+                      ? 'Finish'
+                      : 'Next'
+                    : 'Submit'}
+                </button>
+              </div>
+              {submitted && (
+                <div className={`mt-4 text-center font-medium ${feedbackClass}`}>
+                  {feedbackState === 'correct' ? '✅ Correct!' : '❌ Incorrect'}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        // ========== STATS VIEW ==========
+        <div className="space-y-4">
+          {stats.map(row => (
+            <div key={row.date} className="border-b pb-4">
+              <div
+                className="flex justify-between items-center cursor-pointer"
+                onClick={() =>
+                  setExpandedDate(expandedDate === row.date ? null : row.date)
+                }
+              >
+                <div className="font-medium">
+                  {row.date} — {row.wrongCount} wrong
+                </div>
+                <div>{expandedDate === row.date ? '▾' : '▸'}</div>
+              </div>
+              {expandedDate === row.date && (
+                <ul className="mt-2 pl-4 list-disc space-y-2">
+                  {row.wrongAnswers.map((wa, i) => (
+                    <li key={i}>
+                      <div>
+                        <strong>Q:</strong> {wa.question}
+                      </div>
+                      <div>
+                        <strong>Your:</strong> {wa.selectedOption} |{' '}
+                        <strong>Correct:</strong> {wa.correctAnswer}
+                      </div>
+                      <div className="italic text-sm text-foreground/80">
+                        {wa.explanation}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
