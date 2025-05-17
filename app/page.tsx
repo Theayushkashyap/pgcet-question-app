@@ -12,6 +12,7 @@ interface Question {
   option_d: string;
   answer: string;
   year: number;
+  explanation: string;
 }
 
 interface StatRow {
@@ -27,6 +28,7 @@ interface StatRow {
     optionC: string;
     optionD: string;
     year: number;
+    explanation: string;
   }[];
 }
 
@@ -42,6 +44,7 @@ interface UserAnswer {
     option_c: string;
     option_d: string;
     year: number;
+    explanation: string;
   };
 }
 
@@ -85,7 +88,7 @@ export default function QuizPage() {
       const { data, error } = await supabaseClient
         .from('mcq_questions')
         .select(
-          'id, question, option_a, option_b, option_c, option_d, answer, year'
+          'id, question, option_a, option_b, option_c, option_d, answer, year, explanation'
         )
         .eq('year', year);
 
@@ -118,7 +121,8 @@ export default function QuizPage() {
             option_b,
             option_c,
             option_d,
-            year
+            year,
+            explanation
           )
         `)
         .eq('is_correct', false)
@@ -137,6 +141,7 @@ export default function QuizPage() {
             optionC: string;
             optionD: string;
             year: number;
+            explanation: string;
           }[];
         }> = {};
 
@@ -158,7 +163,8 @@ export default function QuizPage() {
             optionB: mcq_questions.option_b,
             optionC: mcq_questions.option_c,
             optionD: mcq_questions.option_d,
-            year: mcq_questions.year
+            year: mcq_questions.year,
+            explanation: mcq_questions.explanation
           });
         });
 
@@ -400,9 +406,17 @@ export default function QuizPage() {
               })}
             </div>
             {submitted && selectedOption !== questions[currentIndex].answer && (
-              <p className="text-success mb-8 p-5 rounded-xl bg-success/20 glass">
-                Correct answer: {questions[currentIndex].answer}
-              </p>
+              <div className="space-y-4 mb-8">
+                <p className="text-success p-5 rounded-xl bg-success/20 glass">
+                  Correct answer: {questions[currentIndex].answer}
+                </p>
+                {questions[currentIndex].explanation && (
+                  <div className="p-5 rounded-xl bg-primary/10 glass">
+                    <p className="text-primary font-medium mb-2">Explanation:</p>
+                    <p className="text-primary/80">{questions[currentIndex].explanation}</p>
+                  </div>
+                )}
+              </div>
             )}
             <button
               onClick={handleSubmitOrNext}
@@ -464,6 +478,12 @@ export default function QuizPage() {
                               <p className="text-success font-medium mb-1">Correct answer:</p>
                               <p className="text-success">{item.correctAnswer} - {item[`option${item.correctAnswer}` as keyof typeof item]}</p>
                             </div>
+                            {item.explanation && (
+                              <div className="p-3 rounded-lg bg-primary/10">
+                                <p className="text-primary font-medium mb-1">Explanation:</p>
+                                <p className="text-primary/80">{item.explanation}</p>
+                              </div>
+                            )}
                             <div className="mt-4 p-4 rounded-lg bg-secondary/30">
                               <p className="font-medium mb-2">All options:</p>
                               <div className="grid grid-cols-2 gap-3">
