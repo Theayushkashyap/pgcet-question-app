@@ -21,7 +21,7 @@ export async function GET() {
     // Retrieve questions, ordering by ID
     const { data, error } = await supabaseClient
       .from('mcq_questions')
-      .select<Question>('id, question, option_a, option_b, option_c, option_d, answer')
+      .select('id, question, option_a, option_b, option_c, option_d, answer')
       .order('id', { ascending: true });
 
     if (error) {
