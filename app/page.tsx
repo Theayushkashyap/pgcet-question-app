@@ -16,6 +16,21 @@ interface Question {
 interface StatRow {
   date: string;
   wrongCount: number;
+  wrongAnswers: {
+    question: string;
+    selectedOption: string;
+    correctAnswer: string;
+  }[];
+}
+
+interface UserAnswer {
+  created_at: string;
+  selected_option: string;
+  is_correct: boolean;
+  mcq_questions: {
+    question: string;
+    answer: string;
+  };
 }
 
 export default function QuizPage() {
@@ -31,6 +46,7 @@ export default function QuizPage() {
   const [activeTab, setActiveTab] = useState<'quiz' | 'stats'>('quiz');
   const [stats, setStats] = useState<StatRow[]>([]);
   const [feedbackClass, setFeedbackClass] = useState<string>('');
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
   const fetchQuestions = async () => {
     try {
@@ -57,19 +73,52 @@ export default function QuizPage() {
     try {
       const { data, error } = await supabaseClient
         .from('user_answers')
-        .select('created_at')
+        .select(`
+          created_at,
+          selected_option,
+          is_correct,
+          mcq_questions (
+            question,
+            answer
+          )
+        `)
         .eq('is_correct', false)
         .order('created_at', { ascending: true });
 
       if (!error && data) {
-        const grouped: Record<string, number> = {};
-        data.forEach(({ created_at }) => {
+        const grouped: Record<string, {
+          wrongCount: number;
+          wrongAnswers: {
+            question: string;
+            selectedOption: string;
+            correctAnswer: string;
+          }[];
+        }> = {};
+
+        (data as unknown as UserAnswer[]).forEach(({ created_at, selected_option, mcq_questions }) => {
           const date = new Date(created_at).toISOString().split('T')[0];
-          grouped[date] = (grouped[date] || 0) + 1;
+          if (!grouped[date]) {
+            grouped[date] = {
+              wrongCount: 0,
+              wrongAnswers: []
+            };
+          }
+          grouped[date].wrongCount += 1;
+          grouped[date].wrongAnswers.push({
+            question: mcq_questions.question,
+            selectedOption: selected_option,
+            correctAnswer: mcq_questions.answer
+          });
         });
+
         const rows = Object.entries(grouped)
-          .map(([date, wrongCount]) => ({ date, wrongCount }))
+          .map(([date, { wrongCount, wrongAnswers }]) => ({ 
+            date, 
+            wrongCount,
+            wrongAnswers
+          }))
           .sort((a, b) => a.date.localeCompare(b.date));
+        
         setStats(rows);
       }
     } catch (err) {
@@ -269,22 +318,48 @@ export default function QuizPage() {
           {stats.length === 0 ? (
             <p className="text-center text-foreground/60 text-xl">No wrong answers recorded.</p>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Wrong Answers</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.map(({ date, wrongCount }) => (
-                  <tr key={date} className="hover:bg-secondary/30 transition-colors">
-                    <td className="text-lg">{date}</td>
-                    <td className="text-lg">{wrongCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="space-y-6">
+              {stats.map(({ date, wrongCount, wrongAnswers }) => (
+                <div key={date} className="rounded-xl overflow-hidden border border-border/20">
+                  <div 
+                    className="flex items-center justify-between p-4 bg-secondary/30 cursor-pointer hover:bg-secondary/40 transition-colors"
+                    onClick={() => setExpandedDate(expandedDate === date ? null : date)}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <span className="text-lg font-medium">{date}</span>
+                      <span className="px-3 py-1 rounded-full bg-error/20 text-error text-sm">
+                        {wrongCount} wrong {wrongCount === 1 ? 'answer' : 'answers'}
+                      </span>
+                    </div>
+                    <svg 
+                      className={`w-6 h-6 transform transition-transform ${expandedDate === date ? 'rotate-180' : ''}`}
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                  {expandedDate === date && (
+                    <div className="p-4 space-y-4 bg-secondary/10">
+                      {wrongAnswers.map((item, index) => (
+                        <div key={index} className="p-4 rounded-lg bg-secondary/20">
+                          <p className="text-lg font-medium mb-2">{item.question}</p>
+                          <div className="space-y-2">
+                            <p className="text-error">
+                              <span className="font-medium">Your answer:</span> {item.selectedOption}
+                            </p>
+                            <p className="text-success">
+                              <span className="font-medium">Correct answer:</span> {item.correctAnswer}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
