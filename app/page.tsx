@@ -55,14 +55,31 @@ export default function QuizPage() {
     setShowWelcome(false);
   };
 
-  const handleSubmitOrNext = () => {
+  const handleSubmitOrNext = async () => {
     const current = questions[currentIndex];
+
     if (!submitted) {
+      // first click: submit answer
       setSubmitted(true);
-      if (selectedOption === current.answer) {
+      const isCorrect = selectedOption === current.answer;
+      if (isCorrect) {
         setScore((prev) => prev + 1);
       }
+
+      // record to DB
+      const { error: insertError } = await supabaseClient
+        .from('user_answers')
+        .insert({
+          question_id: current.id,
+          selected_option: selectedOption,
+          is_correct: isCorrect,
+        });
+
+      if (insertError) {
+        console.error('Failed to record answer:', insertError.message);
+      }
     } else {
+      // second click: next question or finish
       setSubmitted(false);
       setSelectedOption('');
       if (currentIndex + 1 < questions.length) {
@@ -85,7 +102,6 @@ export default function QuizPage() {
     fetchQuestions();
   };
 
-  // Welcome screen
   if (showWelcome) {
     return (
       <main className="p-6 text-center min-h-screen flex flex-col justify-center items-center">
@@ -101,7 +117,6 @@ export default function QuizPage() {
     );
   }
 
-  // Loading state
   if (loading) {
     return (
       <main className="p-6 text-center">
@@ -110,7 +125,6 @@ export default function QuizPage() {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <main className="p-6 text-center">
@@ -125,7 +139,6 @@ export default function QuizPage() {
     );
   }
 
-  // No questions
   if (questions.length === 0) {
     return (
       <main className="p-6 text-center">
@@ -140,7 +153,6 @@ export default function QuizPage() {
     );
   }
 
-  // Quiz content
   const current = questions[currentIndex];
   const options = [
     current.option_a,
