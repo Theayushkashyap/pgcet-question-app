@@ -69,7 +69,8 @@ export default function QuizPage() {
         setError(error.message);
         setQuestions([]);
       } else {
-        setQuestions(data ?? []);
+        const randomizedQuestions = [...(data ?? [])].sort(() => Math.random() - 0.5);
+        setQuestions(randomizedQuestions);
       }
     } catch (err) {
       setError((err as Error).message);
