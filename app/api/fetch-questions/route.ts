@@ -6,10 +6,11 @@ import { fetchQuestionsFromSource } from '../../../lib/parser';
 export async function GET() {
   try {
     const sources = [
-      'https://example.com/pgcet-2023-questions.html',
-      // add more URLs here
-    ];
-
+        'https://www.some-coaching-site.com/pgcet-2023-ques.html',
+        'https://another-site.edu/archives/pgcet-2022-questions.html',
+        // etc.
+      ];
+      
     let allQs: any[] = [];
     for (const url of sources) {
       const qs = await fetchQuestionsFromSource(url);

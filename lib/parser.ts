@@ -1,6 +1,5 @@
 import axios from 'axios';
-// import * as cheerio from 'cheerio';        // ❌ No default export
-import { load } from 'cheerio';               // ✅ Named import
+import { load } from 'cheerio';
 
 export interface Question {
   text: string;
@@ -10,19 +9,26 @@ export interface Question {
 }
 
 export async function fetchQuestionsFromSource(url: string): Promise<Question[]> {
-  const { data } = await axios.get(url);
-  const $ = load(data);
-  const questions: Question[] = [];
+  try {
+    const { data } = await axios.get<string>(url, { timeout: 5000 });
+    const $ = load(data);
+    const questions: Question[] = [];
 
-  // TODO: update selectors to match your source pages
-  $('.question-block').each((_, el) => {
-    const text    = $(el).find('.q-text').text().trim();
-    const options = ['.optA', '.optB', '.optC', '.optD'].map(sel => $(el).find(sel).text().trim());
-    const answer  = $(el).find('.answer').text().trim();
-    if (text && options.every(o => o) && answer) {
-      questions.push({ text, options, answer, source: url });
-    }
-  });
+    // ←– **You must update these selectors** to whatever your actual source HTML uses.
+    $('.question-block').each((_, el) => {
+      const text    = $(el).find('.q-text').text().trim();
+      const options = ['.optA', '.optB', '.optC', '.optD']
+        .map(sel => $(el).find(sel).text().trim());
+      const answer  = $(el).find('.answer').text().trim();
 
-  return questions;
+      if (text && options.every(o => o) && answer) {
+        questions.push({ text, options, answer, source: url });
+      }
+    });
+
+    return questions;
+  } catch (err: any) {
+    console.error(`Error fetching/parsing ${url}:`, err.message);
+    return [];
+  }
 }
