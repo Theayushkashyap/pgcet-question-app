@@ -480,3 +480,32 @@ input[type="radio"]:hover {
   height: 100%;
   transition: width 0.3s ease;
 }
+
+/* Full screen feedback animations */
+@keyframes flashRed {
+  0%, 100% {
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.2);
+  }
+}
+
+@keyframes flashGreen {
+  0%, 100% {
+    background-color: rgba(34, 197, 94, 0.1);
+  }
+  50% {
+    background-color: rgba(34, 197, 94, 0.2);
+  }
+}
+
+.feedback-screen-red {
+  animation: flashRed 0.5s ease-in-out 3;
+  border: 2px solid rgb(239, 68, 68);
+}
+
+.feedback-screen-green {
+  animation: flashGreen 0.5s ease-in-out 3;
+  border: 2px solid rgb(34, 197, 94);
+}

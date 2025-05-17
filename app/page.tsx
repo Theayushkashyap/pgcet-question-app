@@ -359,45 +359,82 @@ export default function QuizPage() {
             </div>
           ) : (
             // ========== QUESTION CARD ==========
-            <div className="space-y-6">
-              <div className="text-lg font-medium">
-                Q{currentIndex + 1}. {questions[currentIndex].question}
+            <div className={`space-y-6 ${submitted ? (feedbackState === 'correct' ? 'feedback-screen-green' : 'feedback-screen-red') : ''}`}>
+              <div className="bg-secondary/20 p-6 rounded-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-medium text-foreground/60">
+                    Question {currentIndex + 1} of {questions.length}
+                  </span>
+                  <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm">
+                    PGCET {questions[currentIndex].year}
+                  </span>
+                </div>
+                <h2 className="text-2xl font-medium mb-6">
+                  {questions[currentIndex].question}
+                </h2>
+                <div className="grid grid-cols-1 gap-4">
+                  {['a', 'b', 'c', 'd'].map((letter) => {
+                    const optionKey = `option_${letter}` as keyof Question;
+                    const optionValue = questions[currentIndex][optionKey] as string;
+                    const isSelected = selectedOption === optionValue;
+                    const isCorrect = submitted && optionValue === questions[currentIndex].answer;
+                    const isWrong = submitted && isSelected && !isCorrect;
+
+                    return (
+                      <button
+                        key={letter}
+                        type="button"
+                        onClick={() => {
+                          if (!submitted) {
+                            setSelectedOption(optionValue);
+                          }
+                        }}
+                        disabled={submitted}
+                        className={`p-4 rounded-xl text-left transition-all ${
+                          submitted
+                            ? isCorrect
+                              ? 'bg-success/20 text-success border-2 border-success'
+                              : isWrong
+                                ? 'bg-error/20 text-error border-2 border-error'
+                                : isSelected
+                                  ? 'bg-primary/20 text-primary border-2 border-primary'
+                                  : 'bg-secondary/50 border-2 border-secondary'
+                            : isSelected
+                              ? 'bg-primary/20 text-primary border-2 border-primary'
+                              : 'bg-secondary/50 hover:bg-secondary/70 border-2 border-secondary/50'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            submitted
+                              ? isCorrect
+                                ? 'bg-success/30 text-success'
+                                : isWrong
+                                  ? 'bg-error/30 text-error'
+                                  : isSelected
+                                    ? 'bg-primary/30 text-primary'
+                                    : 'bg-secondary/70'
+                              : isSelected
+                                ? 'bg-primary/30 text-primary'
+                                : 'bg-secondary/70'
+                          }`}>
+                            {letter.toUpperCase()}
+                          </div>
+                          <span className="text-lg">{optionValue}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {(['a','b','c','d'] as const).map(letter => {
-                  // *** CAST TO STRING HERE ***
-                  const opt = questions[currentIndex][`option_${letter}` as keyof Question] as string;
-                  const isSelected = selectedOption === opt;
-                  const baseClass = `p-4 border rounded-lg cursor-pointer hover:shadow-md transition-all`;
-                  let appliedClass = baseClass;
-                  if (submitted) {
-                    // highlight correct/incorrect after submit
-                    if (opt === questions[currentIndex].answer) {
-                      appliedClass += ' border-green-500 bg-green-100';
-                    } else if (isSelected && feedbackState === 'incorrect') {
-                      appliedClass += ' border-red-500 bg-red-100';
-                    } else {
-                      appliedClass += ' border-gray-300';
-                    }
-                  } else if (isSelected) {
-                    appliedClass += ' border-primary bg-primary/10';
-                  }
-                  return (
-                    <div
-                      key={letter}
-                      className={appliedClass}
-                      onClick={() => !submitted && setSelectedOption(opt)}
-                    >
-                      <strong>{letter.toUpperCase()}.</strong> {opt}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="text-right">
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-foreground/60">
+                  Score: {score} / {questions.length}
+                </div>
                 <button
                   onClick={handleSubmitOrNext}
                   disabled={!submitted && !selectedOption}
-                  className="px-6 py-3 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:from-primary-hover hover:to-primary transition-all"
+                  className="px-6 py-3 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:from-primary-hover hover:to-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitted
                     ? currentIndex + 1 === questions.length
@@ -407,8 +444,62 @@ export default function QuizPage() {
                 </button>
               </div>
               {submitted && (
-                <div className={`mt-4 text-center font-medium ${feedbackClass}`}>
-                  {feedbackState === 'correct' ? '✅ Correct!' : '❌ Incorrect'}
+                <div className="mt-8 space-y-4">
+                  {feedbackState === 'correct' ? (
+                    <div className="p-6 bg-success/20 rounded-xl text-center">
+                      <div className="flex items-center justify-center space-x-2 text-success text-xl mb-4">
+                        <span>✓</span>
+                        <span>Correct!</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-error/20 rounded-xl text-center">
+                      <div className="flex items-center justify-center space-x-2 text-error text-xl mb-4">
+                        <span>✕</span>
+                        <span>Incorrect</span>
+                      </div>
+                      <div className="text-error">
+                        <p className="font-medium mb-2">Correct Answer:</p>
+                        <p>{questions[currentIndex].answer}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="p-6 bg-primary/10 rounded-xl space-y-4">
+                    <div className="border-b border-primary/20 pb-4">
+                      <h3 className="text-primary font-medium mb-2">Question Analysis:</h3>
+                      <p className="text-primary/80">{questions[currentIndex].question}</p>
+                    </div>
+                    
+                    <div className="border-b border-primary/20 pb-4">
+                      <h3 className="text-primary font-medium mb-2">Your Answer:</h3>
+                      <p className={`${feedbackState === 'correct' ? 'text-success' : 'text-error'}`}>
+                        {selectedOption}
+                      </p>
+                    </div>
+
+                    <div className="border-b border-primary/20 pb-4">
+                      <h3 className="text-primary font-medium mb-2">Correct Answer:</h3>
+                      <p className="text-success">
+                        {questions[currentIndex].answer}
+                      </p>
+                    </div>
+
+                    {questions[currentIndex].explanation && (
+                      <div>
+                        <h3 className="text-primary font-medium mb-2">Detailed Explanation:</h3>
+                        <p className="text-primary/80">{questions[currentIndex].explanation}</p>
+                      </div>
+                    )}
+
+                    <div className="pt-4">
+                      <h3 className="text-primary font-medium mb-2">Key Points:</h3>
+                      <ul className="list-disc list-inside space-y-2 text-primary/80">
+                        <li>This question is from PGCET {questions[currentIndex].year}</li>
+                        <li>Make sure to understand the concept thoroughly</li>
+                        <li>Review related topics if needed</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
