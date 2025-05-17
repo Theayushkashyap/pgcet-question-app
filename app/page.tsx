@@ -20,6 +20,10 @@ interface StatRow {
     question: string;
     selectedOption: string;
     correctAnswer: string;
+    optionA: string;
+    optionB: string;
+    optionC: string;
+    optionD: string;
   }[];
 }
 
@@ -30,6 +34,10 @@ interface UserAnswer {
   mcq_questions: {
     question: string;
     answer: string;
+    option_a: string;
+    option_b: string;
+    option_c: string;
+    option_d: string;
   };
 }
 
@@ -46,6 +54,7 @@ export default function QuizPage() {
   const [activeTab, setActiveTab] = useState<'quiz' | 'stats'>('quiz');
   const [stats, setStats] = useState<StatRow[]>([]);
   const [feedbackClass, setFeedbackClass] = useState<string>('');
+  const [feedbackState, setFeedbackState] = useState<'correct' | 'incorrect' | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
   const fetchQuestions = async () => {
@@ -79,7 +88,11 @@ export default function QuizPage() {
           is_correct,
           mcq_questions (
             question,
-            answer
+            answer,
+            option_a,
+            option_b,
+            option_c,
+            option_d
           )
         `)
         .eq('is_correct', false)
@@ -92,6 +105,10 @@ export default function QuizPage() {
             question: string;
             selectedOption: string;
             correctAnswer: string;
+            optionA: string;
+            optionB: string;
+            optionC: string;
+            optionD: string;
           }[];
         }> = {};
 
@@ -107,7 +124,11 @@ export default function QuizPage() {
           grouped[date].wrongAnswers.push({
             question: mcq_questions.question,
             selectedOption: selected_option,
-            correctAnswer: mcq_questions.answer
+            correctAnswer: mcq_questions.answer,
+            optionA: mcq_questions.option_a,
+            optionB: mcq_questions.option_b,
+            optionC: mcq_questions.option_c,
+            optionD: mcq_questions.option_d
           });
         });
 
@@ -144,22 +165,34 @@ export default function QuizPage() {
     const current = questions[currentIndex];
     if (!submitted) {
       setSubmitted(true);
-      const isCorrect = selectedOption === current.answer;
+      
+      // Get the correct option value based on the letter (A, B, C, D)
+      const correctOption = current.answer.toUpperCase();
+      const correctValue = current[`option_${correctOption.toLowerCase()}` as keyof Question];
+      
+      const isCorrect = selectedOption === correctValue;
+      
       if (isCorrect) {
         setScore((s) => s + 1);
         setFeedbackClass('blink-green');
+        setFeedbackState('correct');
       } else {
         setFeedbackClass('blink-red');
+        setFeedbackState('incorrect');
       }
-      await supabaseClient.from('user_answers').insert({
-        question_id: current.id,
-        selected_option: selectedOption,
-        is_correct: isCorrect,
-      });
+
+      setTimeout(async () => {
+        await supabaseClient.from('user_answers').insert({
+          question_id: current.id,
+          selected_option: selectedOption,
+          is_correct: isCorrect,
+        });
+      }, 100);
     } else {
       setSubmitted(false);
       setSelectedOption('');
       setFeedbackClass('');
+      setFeedbackState(null);
       if (currentIndex + 1 < questions.length) {
         setCurrentIndex((i) => i + 1);
       } else {
@@ -261,7 +294,12 @@ export default function QuizPage() {
             </button>
           </div>
         ) : (
-          <div className={`question-transition p-8 rounded-2xl bg-secondary/10 glass ${feedbackClass}`}>
+          <div 
+            className={`question-transition p-8 rounded-2xl bg-secondary/10 glass ${feedbackClass} ${
+              feedbackState === 'correct' ? 'feedback-correct' : 
+              feedbackState === 'incorrect' ? 'feedback-incorrect' : ''
+            }`}
+          >
             <p className="mb-4 text-sm font-medium text-foreground/60">
               Question {currentIndex + 1} of {questions.length}
             </p>
@@ -307,7 +345,7 @@ export default function QuizPage() {
             <button
               onClick={handleSubmitOrNext}
               disabled={!selectedOption && !submitted}
-              className="w-full px-8 py-5 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-xl font-medium hover-lift"
+              className="w-full px-8 py-5 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-xl font-medium hover-lift border-2 border-primary/30 hover:border-primary/50 transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               {!submitted ? 'Submit' : currentIndex + 1 === questions.length ? 'Finish' : 'Next'}
             </button>
@@ -343,15 +381,34 @@ export default function QuizPage() {
                   {expandedDate === date && (
                     <div className="p-4 space-y-4 bg-secondary/10">
                       {wrongAnswers.map((item, index) => (
-                        <div key={index} className="p-4 rounded-lg bg-secondary/20">
-                          <p className="text-lg font-medium mb-2">{item.question}</p>
-                          <div className="space-y-2">
-                            <p className="text-error">
-                              <span className="font-medium">Your answer:</span> {item.selectedOption}
-                            </p>
-                            <p className="text-success">
-                              <span className="font-medium">Correct answer:</span> {item.correctAnswer}
-                            </p>
+                        <div key={index} className="p-6 rounded-lg bg-secondary/20">
+                          <p className="text-lg font-medium mb-4">{item.question}</p>
+                          <div className="space-y-3">
+                            <div className="p-3 rounded-lg bg-error/10">
+                              <p className="text-error font-medium mb-1">Your answer:</p>
+                              <p className="text-error">{item.selectedOption}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-success/10">
+                              <p className="text-success font-medium mb-1">Correct answer:</p>
+                              <p className="text-success">{item.correctAnswer} - {item[`option${item.correctAnswer}` as keyof typeof item]}</p>
+                            </div>
+                            <div className="mt-4 p-4 rounded-lg bg-secondary/30">
+                              <p className="font-medium mb-2">All options:</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="p-2 rounded bg-secondary/20">
+                                  <span className="font-medium">A:</span> {item.optionA}
+                                </div>
+                                <div className="p-2 rounded bg-secondary/20">
+                                  <span className="font-medium">B:</span> {item.optionB}
+                                </div>
+                                <div className="p-2 rounded bg-secondary/20">
+                                  <span className="font-medium">C:</span> {item.optionC}
+                                </div>
+                                <div className="p-2 rounded bg-secondary/20">
+                                  <span className="font-medium">D:</span> {item.optionD}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}
