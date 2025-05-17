@@ -11,11 +11,13 @@ interface Question {
   option_c: string;
   option_d: string;
   answer: string;
+  year: number;
 }
 
 interface StatRow {
   date: string;
   wrongCount: number;
+  year: number;
   wrongAnswers: {
     question: string;
     selectedOption: string;
@@ -24,6 +26,7 @@ interface StatRow {
     optionB: string;
     optionC: string;
     optionD: string;
+    year: number;
   }[];
 }
 
@@ -38,6 +41,7 @@ interface UserAnswer {
     option_b: string;
     option_c: string;
     option_d: string;
+    year: number;
   };
 }
 
@@ -57,14 +61,33 @@ export default function QuizPage() {
   const [feedbackClass, setFeedbackClass] = useState<string>('');
   const [feedbackState, setFeedbackState] = useState<'correct' | 'incorrect' | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
-  const fetchQuestions = async () => {
+  const fetchAvailableYears = async () => {
+    try {
+      const { data, error } = await supabaseClient
+        .from('mcq_questions')
+        .select('year')
+        .order('year', { ascending: false });
+
+      if (!error && data) {
+        const years = [...new Set(data.map(q => q.year))];
+        setAvailableYears(years);
+      }
+    } catch (err) {
+      console.error('Error fetching years:', err);
+    }
+  };
+
+  const fetchQuestions = async (year: number) => {
     try {
       const { data, error } = await supabaseClient
         .from('mcq_questions')
         .select(
-          'id, question, option_a, option_b, option_c, option_d, answer'
-        );
+          'id, question, option_a, option_b, option_c, option_d, answer, year'
+        )
+        .eq('year', year);
 
       if (error) {
         setError(error.message);
@@ -94,7 +117,8 @@ export default function QuizPage() {
             option_a,
             option_b,
             option_c,
-            option_d
+            option_d,
+            year
           )
         `)
         .eq('is_correct', false)
@@ -103,6 +127,7 @@ export default function QuizPage() {
       if (!error && data) {
         const grouped: Record<string, {
           wrongCount: number;
+          year: number;
           wrongAnswers: {
             question: string;
             selectedOption: string;
@@ -111,6 +136,7 @@ export default function QuizPage() {
             optionB: string;
             optionC: string;
             optionD: string;
+            year: number;
           }[];
         }> = {};
 
@@ -119,6 +145,7 @@ export default function QuizPage() {
           if (!grouped[date]) {
             grouped[date] = {
               wrongCount: 0,
+              year: mcq_questions.year,
               wrongAnswers: []
             };
           }
@@ -130,14 +157,16 @@ export default function QuizPage() {
             optionA: mcq_questions.option_a,
             optionB: mcq_questions.option_b,
             optionC: mcq_questions.option_c,
-            optionD: mcq_questions.option_d
+            optionD: mcq_questions.option_d,
+            year: mcq_questions.year
           });
         });
 
         const rows = Object.entries(grouped)
-          .map(([date, { wrongCount, wrongAnswers }]) => ({ 
+          .map(([date, { wrongCount, wrongAnswers, year }]) => ({ 
             date, 
             wrongCount,
+            year,
             wrongAnswers
           }))
           .sort((a, b) => a.date.localeCompare(b.date));
@@ -150,8 +179,14 @@ export default function QuizPage() {
   };
 
   useEffect(() => {
-    fetchQuestions();
+    fetchAvailableYears();
   }, []);
+
+  const handleYearSelect = (year: number) => {
+    setSelectedYear(year);
+    setLoading(true);
+    fetchQuestions(year);
+  };
 
   useEffect(() => {
     if (activeTab === 'stats') {
@@ -218,22 +253,41 @@ export default function QuizPage() {
     setLoading(true);
     setShowWelcome(true);
     setActiveTab('quiz');
-    fetchQuestions();
+    fetchQuestions(selectedYear ?? 0);
   };
 
   if (showWelcome) {
     return (
-      <main className={`p-8 text-center min-h-screen flex flex-col justify-center items-center glass ${isTransitioning ? 'fullscreen-transition' : ''}`}>
+      <main className="p-8 text-center min-h-screen flex flex-col justify-center items-center glass">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-6xl font-bold mb-8 animate-welcome gradient-text">Welcome Deekshitha Jha!</h1>
-          <p className="mb-12 text-2xl text-foreground/80 animate-welcome" style={{ animationDelay: '0.3s' }}>Ready to answer some PGCET questions?</p>
-          <button
-            onClick={handleStart}
-            className="px-10 py-5 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:bg-primary-hover animate-welcome text-xl font-medium hover-lift border-2 border-primary/30 hover:border-primary/50 transition-all duration-300 shadow-lg hover:shadow-xl"
-            style={{ animationDelay: '0.6s' }}
-          >
-            Start Quiz
-          </button>
+          <p className="mb-12 text-2xl text-foreground/80 animate-welcome" style={{ animationDelay: '0.3s' }}>
+            Choose a year to start your PGCET practice
+          </p>
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            {availableYears.map((year) => (
+              <button
+                key={year}
+                onClick={() => handleYearSelect(year)}
+                className={`px-8 py-4 rounded-xl transition-all hover-lift border-2 ${
+                  selectedYear === year
+                    ? 'bg-gradient-to-r from-primary to-primary-hover text-white border-primary/50'
+                    : 'bg-secondary text-foreground border-secondary/50 hover:bg-secondary/80'
+                }`}
+              >
+                PGCET {year}
+              </button>
+            ))}
+          </div>
+          {selectedYear && (
+            <button
+              onClick={handleStart}
+              className="px-10 py-5 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:bg-primary-hover animate-welcome text-xl font-medium hover-lift border-2 border-primary/30 hover:border-primary/50 transition-all duration-300 shadow-lg hover:shadow-xl"
+              style={{ animationDelay: '0.6s' }}
+            >
+              Start Quiz
+            </button>
+          )}
         </div>
       </main>
     );
@@ -264,7 +318,8 @@ export default function QuizPage() {
 
   return (
     <main className="p-8 max-w-3xl mx-auto my-8 rounded-2xl glass">
-      <h1 className="text-5xl font-bold mb-10 gradient-text">PGCET MCQ Quiz</h1>
+      <h1 className="text-5xl font-bold mb-2 gradient-text">PGCET MCQ Quiz</h1>
+      <p className="text-xl text-foreground/60 mb-10">Year {selectedYear}</p>
       <div className="flex space-x-6 mb-10">
         <button
           onClick={() => setActiveTab('quiz')}
@@ -366,7 +421,7 @@ export default function QuizPage() {
             <p className="text-center text-foreground/60 text-xl">No wrong answers recorded.</p>
           ) : (
             <div className="space-y-6">
-              {stats.map(({ date, wrongCount, wrongAnswers }) => (
+              {stats.map(({ date, wrongCount, wrongAnswers, year }) => (
                 <div key={date} className="rounded-xl overflow-hidden border border-border/20">
                   <div 
                     className="flex items-center justify-between p-4 bg-secondary/30 cursor-pointer hover:bg-secondary/40 transition-colors"
@@ -374,6 +429,9 @@ export default function QuizPage() {
                   >
                     <div className="flex items-center space-x-4">
                       <span className="text-lg font-medium">{date}</span>
+                      <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm">
+                        PGCET {year}
+                      </span>
                       <span className="px-3 py-1 rounded-full bg-error/20 text-error text-sm">
                         {wrongCount} wrong {wrongCount === 1 ? 'answer' : 'answers'}
                       </span>
@@ -391,7 +449,12 @@ export default function QuizPage() {
                     <div className="p-4 space-y-4 bg-secondary/10">
                       {wrongAnswers.map((item, index) => (
                         <div key={index} className="p-6 rounded-lg bg-secondary/20">
-                          <p className="text-lg font-medium mb-4">{item.question}</p>
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-lg font-medium">{item.question}</p>
+                            <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm">
+                              PGCET {item.year}
+                            </span>
+                          </div>
                           <div className="space-y-3">
                             <div className="p-3 rounded-lg bg-error/10">
                               <p className="text-error font-medium mb-1">Your answer:</p>
