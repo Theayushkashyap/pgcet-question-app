@@ -365,7 +365,8 @@ export default function QuizPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {(['a','b','c','d'] as const).map(letter => {
-                  const opt = questions[currentIndex][`option_${letter}` as keyof Question];
+                  // *** CAST TO STRING HERE ***
+                  const opt = questions[currentIndex][`option_${letter}` as keyof Question] as string;
                   const isSelected = selectedOption === opt;
                   const baseClass = `p-4 border rounded-lg cursor-pointer hover:shadow-md transition-all`;
                   let appliedClass = baseClass;
