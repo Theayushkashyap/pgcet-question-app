@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabaseClient } from '@/lib/supabaseClient';
 
 interface Question {
-  id: number;
+  id: string;
   question: string;
   option_a: string;
   option_b: string;
@@ -134,18 +134,14 @@ export default function QuizPage() {
   const fetchQuestions = async (year: number) => {
     try {
       const { data, error } = await supabaseClient
-        .from('mcq_questions')
-        .select(
-          'id, question, option_a, option_b, option_c, option_d, answer, year, explanation'
-        )
-        .eq('year', year);
+        .from<Question>('mcq_questions')
+        .select('id, question, option_a, option_b, option_c, option_d, answer');
 
       if (error) {
         setError(error.message);
         setQuestions([]);
-      } else {
-        const randomizedQuestions = [...(data ?? [])].sort(() => Math.random() - 0.5);
-        setQuestions(randomizedQuestions);
+      } else if (data) {
+        setQuestions(data);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -234,65 +230,9 @@ export default function QuizPage() {
     const current = questions[currentIndex];
     if (!submitted) {
       setSubmitted(true);
-      
-      const correctOption = current.answer.toUpperCase();
-      const correctValue = current[`option_${correctOption.toLowerCase()}` as keyof Question];
-      
-      const isCorrect = selectedOption === correctValue;
-      
-      if (isCorrect) {
-        setScore(s => s + 1);
-        setFeedbackClass('blink-green');
-        setFeedbackState('correct');
-      } else {
-        setFeedbackClass('blink-red');
-        setFeedbackState('incorrect');
+      if (selectedOption === current.answer) {
+        setScore(prev => prev + 1);
       }
-
-      // Store the question response in current attempt
-      setCurrentAttempt(prev => {
-        const newAttempt: QuizAttempt = {
-          year: current.year,
-          total_questions: questions.length,
-          correct_answers: isCorrect ? 1 : 0,
-          wrong_answers: isCorrect ? 0 : 1,
-          questions: [{
-            question_id: current.id,
-            question: current.question,
-            selected_option: selectedOption,
-            correct_answer: correctValue.toString(),
-            is_correct: isCorrect,
-            option_a: current.option_a,
-            option_b: current.option_b,
-            option_c: current.option_c,
-            option_d: current.option_d,
-            explanation: current.explanation
-          }]
-        };
-
-        if (!prev) {
-          return newAttempt;
-        }
-
-        return {
-          ...prev,
-          correct_answers: prev.correct_answers + (isCorrect ? 1 : 0),
-          wrong_answers: prev.wrong_answers + (isCorrect ? 0 : 1),
-          questions: [...prev.questions, {
-            question_id: current.id,
-            question: current.question,
-            selected_option: selectedOption,
-            correct_answer: correctValue.toString(),
-            is_correct: isCorrect,
-            option_a: current.option_a,
-            option_b: current.option_b,
-            option_c: current.option_c,
-            option_d: current.option_d,
-            explanation: current.explanation
-          }]
-        };
-      });
-
     } else {
       // Next question
       setSubmitted(false);
@@ -300,7 +240,7 @@ export default function QuizPage() {
       setFeedbackClass('');
       setFeedbackState(null);
       if (currentIndex + 1 < questions.length) {
-        setCurrentIndex(i => i + 1);
+        setCurrentIndex(prev => prev + 1);
       } else {
         // Quiz finished - save the attempt
         if (currentAttempt) {
@@ -448,46 +388,51 @@ export default function QuizPage() {
         >
           Stats
         </button>
-      </div>
+      </main>
+    );
+  }
 
-      {activeTab === 'quiz' ? (
-        // ========== QUIZ VIEW ==========
-        <>
-          {finished ? (
-            <div className="text-center">
-              <h2 className="text-3xl font-bold mb-4">Quiz Complete!</h2>
-              <p className="text-xl mb-6">
-                You scored {score} out of {questions.length}
-              </p>
-              <button
-                onClick={handleRestart}
-                className="px-6 py-3 bg-gradient-to-r from-primary to-primary-hover text-white rounded-xl hover:from-primary-hover hover:to-primary text-lg"
-              >
-                Restart
-              </button>
-            </div>
-          ) : (
-            // ========== QUESTION CARD ==========
-            <div className={`space-y-6 ${submitted ? (feedbackState === 'correct' ? 'feedback-screen-green' : 'feedback-screen-red') : ''}`}>
-              <div className="bg-secondary/20 p-6 rounded-xl">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-medium text-foreground/60">
-                    Question {currentIndex + 1} of {questions.length}
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm">
-                    PGCET {questions[currentIndex].year}
-                  </span>
-                </div>
-                <h2 className="text-2xl font-medium mb-6">
-                  {questions[currentIndex].question}
-                </h2>
-                <div className="grid grid-cols-1 gap-4">
-                  {['a', 'b', 'c', 'd'].map((letter) => {
-                    const optionKey = `option_${letter}` as keyof Question;
-                    const optionValue = questions[currentIndex][optionKey] as string;
-                    const isSelected = selectedOption === optionValue;
-                    const isCorrect = submitted && optionValue === questions[currentIndex].answer;
-                    const isWrong = submitted && isSelected && !isCorrect;
+  // Quiz content
+  const current = questions[currentIndex];
+  const options = [
+    current.option_a,
+    current.option_b,
+    current.option_c,
+    current.option_d,
+  ];
+
+  return (
+    <main className="p-6 max-w-xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6">PGCET MCQ Quiz</h1>
+
+      {finished ? (
+        <div className="text-center">
+          <p className="text-2xl mb-4">Quiz Complete!</p>
+          <p className="text-xl">
+            Score: {score} / {questions.length}
+          </p>
+          <button
+            onClick={handleRestart}
+            className="mt-6 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
+            Restart Quiz
+          </button>
+        </div>
+      ) : (
+        <div>
+          <p className="mb-2">
+            Question {currentIndex + 1} of {questions.length}
+          </p>
+          <p className="font-medium mb-4">{current.question}</p>
+
+          <div className="space-y-3 mb-6">
+            {options.map((opt, idx) => {
+              const isCorrect =
+                submitted && opt === current.answer;
+              const isSelectedWrong =
+                submitted &&
+                opt === selectedOption &&
+                selectedOption !== current.answer;
 
                     return (
                       <button
