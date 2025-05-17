@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabaseClient } from '@/lib/supabaseClient';
 
 interface Question {
-  id: string;
+  id: number;
   question: string;
   option_a: string;
   option_b: string;
@@ -27,15 +27,17 @@ export default function QuizPage() {
   const fetchQuestions = async () => {
     try {
       const { data, error } = await supabaseClient
-        .from<Question>('mcq_questions')
-        .select('id, question, option_a, option_b, option_c, option_d, answer');
+        .from('mcq_questions')
+        .select(
+          'id, question, option_a, option_b, option_c, option_d, answer'
+        );
 
       if (error) {
         console.error('Supabase error:', error.message);
         setError(error.message);
         setQuestions([]);
-      } else if (data) {
-        setQuestions(data);
+      } else {
+        setQuestions(data ?? []);
       }
     } catch (err) {
       console.error('Unexpected fetch error:', err);
@@ -58,13 +60,13 @@ export default function QuizPage() {
     if (!submitted) {
       setSubmitted(true);
       if (selectedOption === current.answer) {
-        setScore(prev => prev + 1);
+        setScore((prev) => prev + 1);
       }
     } else {
       setSubmitted(false);
       setSelectedOption('');
       if (currentIndex + 1 < questions.length) {
-        setCurrentIndex(prev => prev + 1);
+        setCurrentIndex((prev) => prev + 1);
       } else {
         setFinished(true);
       }
@@ -173,8 +175,7 @@ export default function QuizPage() {
 
           <div className="space-y-3 mb-6">
             {options.map((opt, idx) => {
-              const isCorrect =
-                submitted && opt === current.answer;
+              const isCorrect = submitted && opt === current.answer;
               const isSelectedWrong =
                 submitted &&
                 opt === selectedOption &&
